@@ -12,7 +12,8 @@ import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/V
  */
 contract Raffle is VRFConsumerBaseV2Plus {
     /*Errors */
-    error NotEnoughEth();
+    error Raffle__NotEnoughEth();
+    error Raffle__TransferFailed();
 
     uint16 private constant REQUEST_CONFIRMATION = 3;
     uint32 private constant NUM_WORDS = 1;
@@ -24,6 +25,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     bytes32 private immutable i_keyHash;
     uint256 private s_lastTimeStamp;
     address payable[] private s_players;
+    address private s_recentWinner;
 
     /* Events */
     event RaffleEntered(address indexed player);
@@ -47,7 +49,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     function enterRaffle() external payable {
         // require(msg.value >= i_entranceFee, "Not enough ETH to enter the raffle");
         if (msg.value < i_entranceFee) {
-            revert NotEnoughEth();
+            revert Raffle__NotEnoughEth();
         }
         s_players.push(payable(msg.sender));
 
@@ -79,7 +81,15 @@ contract Raffle is VRFConsumerBaseV2Plus {
     function fulfillRandomWords(
         uint256 requestId,
         uint256[] calldata randomness
-    ) internal override {}
+    ) internal override {
+        uint256 indexOfWinner = randomness[0] % s_players.length;
+        address payable winner = s_players[indexOfWinner];
+        s_recentWinner = winner;
+        (bool success, ) = winner.call{value: address(this).balance}("");
+        if (!success) {
+            revert Raffle__TransferFailed();
+        }
+    }
 
     /* Getter Functions */
     function getEntranceFee() public view returns (uint256) {
